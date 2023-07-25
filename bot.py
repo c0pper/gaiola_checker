@@ -5,8 +5,8 @@ from pyvirtualdisplay import Display
 from dataclasses import dataclass
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
 from datetime import datetime, timedelta
 from time import sleep
 import logging
@@ -56,7 +56,8 @@ display.start()
 opts = webdriver.ChromeOptions()
 opts.add_argument('--no-sandbox')
 opts.add_argument('--disable-dev-shm-usage')
-driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=opts)
+driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
+# driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=opts)
 # driver = webdriver.Chrome(options=opts)
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
