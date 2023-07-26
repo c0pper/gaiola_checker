@@ -1,0 +1,14 @@
+[Unit]
+Description=Gaiola checker
+After=network.target
+
+[Service]
+ExecStart=/home/pi/docker/gaiola_checker/venv/bin/python /home/pi/docker/gaiola_checker/bot.py
+WorkingDirectory=/home/pi/docker/gaiola_checker
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
