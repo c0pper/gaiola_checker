@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.firefox import GeckoDriverManager
 from datetime import datetime, timedelta
 from time import sleep
@@ -56,9 +57,9 @@ display.start()
 opts = webdriver.ChromeOptions()
 opts.add_argument('--no-sandbox')
 opts.add_argument('--disable-dev-shm-usage')
-driver = webdriver.Firefox()
-# driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=opts)
-# driver = webdriver.Chrome(options=opts)
+# driver = webdriver.Firefox()
+driver = webdriver.Chrome(service=ChromeService(executable_path="chromedriver"), options=opts)
+driver = webdriver.Chrome(options=opts)
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
