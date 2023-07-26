@@ -56,7 +56,7 @@ display.start()
 opts = webdriver.ChromeOptions()
 opts.add_argument('--no-sandbox')
 opts.add_argument('--disable-dev-shm-usage')
-driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
+driver = webdriver.Firefox(service=FirefoxService(executable_path="geckodriver"))
 # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=opts)
 # driver = webdriver.Chrome(options=opts)
 
