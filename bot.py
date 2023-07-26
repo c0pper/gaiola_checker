@@ -58,7 +58,7 @@ opts = webdriver.ChromeOptions()
 opts.add_argument('--no-sandbox')
 opts.add_argument('--disable-dev-shm-usage')
 # driver = webdriver.Firefox()
-driver = webdriver.Chrome(service=ChromeService(executable_path="chromedriver"), options=opts)
+driver = webdriver.Chrome(service=ChromeService(executable_path="./chromedriver"), options=opts)
 driver = webdriver.Chrome(options=opts)
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
