@@ -8,6 +8,7 @@ COPY bot.py requirements.txt ./
 RUN apt-get install chromium -y
 RUN apt-get install wget -y
 RUN wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/115.0.5790.102/linux64/chromedriver-linux64.zip
+RUN apt-get install unzip -y
 RUN unzip chromedriver_linux64.zip
 RUN mv chromedriver /usr/bin/chromedriver
 CMD [ "python3", "./bot.py"]
