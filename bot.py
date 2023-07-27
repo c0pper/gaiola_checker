@@ -1,16 +1,12 @@
 import os
+from datetime import datetime, timedelta
+from time import sleep
+from dataclasses import dataclass
+import logging
+from enum import Enum
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from pyvirtualdisplay import Display
-from dataclasses import dataclass
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.firefox import GeckoDriverManager
-from datetime import datetime, timedelta
-from time import sleep
-import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
@@ -30,6 +26,10 @@ class Day:
     def __repr__(self) -> str:
         return f"{self.date} - prev_disp_morning: {self.prev_disp_morning}, new_disp_morning: {self.new_disp_morning}, prev_disp_noon: {self.prev_disp_noon}, new_disp_noon: {self.new_disp_noon}"
 
+
+class Turno(Enum):
+    MATTINO = "Mattino"
+    POMERIGGIO = "Pomeriggio"
 
 load_dotenv()
 TELE_TOKEN = os.getenv('TELE_TOKEN')
@@ -58,8 +58,6 @@ opts = webdriver.ChromeOptions()
 opts.add_argument('--no-sandbox')
 opts.add_argument('--disable-dev-shm-usage')
 driver = webdriver.Chrome()
-# driver = webdriver.Chrome(service=ChromeService(executable_path="./chromedriver"), options=opts)
-# driver = webdriver.Chrome(options=opts)
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
@@ -72,6 +70,7 @@ for window_handle in driver.window_handles:
         break
 sleep(1)
 print(driver.current_url)
+days = None
 
 
 #  Setup Bot ----------------------------------------------------------------------------------------
@@ -104,23 +103,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the alarm message."""
+    global days 
     job = context.job
 
     bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
     bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
     
-    while "days" not in globals():
+    while not days:  # è il primo ciclo dopo l'avvio
         print("creating days list")
-        global days 
         days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
-    # [print(day) for day in days]
+    [print(f"-- {day}") for day in days]
 
     if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
-        print("New week detected, refreshing page")
+        print("\nNew week detected, refreshing page\n")
         driver.refresh()
         bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
         bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
         days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+        [print(f"-- {day}") for day in days]
 
     for day in days:
         print(f"Checking {day.day_name} {day.date}")
@@ -131,24 +131,22 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
             e.click()
             sleep(0.1)
             alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-            if idx == 0:
-                turno = "mattino"
-                day.new_disp_morning = int(alert_posti.text[-1])
-                print(f"* Posti {turno}: {str(day.new_disp_morning)} (originale: {day.prev_disp_morning})")
-                if day.prev_disp_morning == 0 and day.new_disp_morning != 0:
-                    messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
-                    print(messaggio_posto_libero)
-                    await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
-                day.prev_disp_morning = day.new_disp_morning
+            turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
+            current_disp = int(alert_posti.text[-1])
+            prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
+            # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
+
+            print(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
+            if prev_disp == 0 and current_disp != 0:
+                messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
+                print(messaggio_posto_libero)
+                await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
+
+            #  aggiornamento disponibilità precedente
+            if turno == Turno.MATTINO:
+                day.prev_disp_morning = current_disp
             else:
-                turno = "pomeriggio"
-                day.new_disp_noon = int(alert_posti.text[-1])
-                print(f"* Posti {turno}: {str(day.new_disp_noon)} (originale: {day.prev_disp_noon})")
-                if day.prev_disp_noon == 0 and day.new_disp_noon != 0:
-                    messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
-                    print(messaggio_posto_libero)
-                    await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
-                day.prev_disp_noon = day.new_disp_noon
+                day.prev_disp_noon = current_disp
             
     print("-------------\n\n")
 
