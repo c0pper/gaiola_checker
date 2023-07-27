@@ -54,9 +54,6 @@ def get_dates_of_current_week():
 display = Display(visible=0, size=(1366, 768))
 display.start()
 
-opts = webdriver.ChromeOptions()
-opts.add_argument('--no-sandbox')
-opts.add_argument('--disable-dev-shm-usage')
 driver = webdriver.Chrome()
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
