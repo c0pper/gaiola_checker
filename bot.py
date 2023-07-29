@@ -54,7 +54,7 @@ def get_dates_of_current_week():
 display = Display(visible=0, size=(1366, 768))
 display.start()
 
-driver = webdriver.Firefox()
+driver = webdriver.Chrome()
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
