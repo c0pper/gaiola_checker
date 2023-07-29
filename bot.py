@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from time import sleep
 from dataclasses import dataclass
 import logging
@@ -54,7 +54,7 @@ def get_dates_of_current_week():
 display = Display(visible=0, size=(1366, 768))
 display.start()
 
-driver = webdriver.Chrome()
+driver = webdriver.Firefox()
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
@@ -68,6 +68,7 @@ for window_handle in driver.window_handles:
 sleep(1)
 print(driver.current_url)
 days = None
+last_iteration_day = None
 
 
 #  Setup Bot ----------------------------------------------------------------------------------------
@@ -98,25 +99,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text(text)
 
 
-async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the alarm message."""
-    global days 
-    job = context.job
 
+def get_days_list():
     bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
     bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
+    days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+    return days
+
+
+async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the alarm message."""
+    global days
+    global last_iteration_day
+    job = context.job
+
+    current_day = date.today()
+    print(current_day, last_iteration_day)
+    if last_iteration_day and last_iteration_day != current_day: # se è un nuovo giorno refreshiamo la pagina
+        print("New day, refreshing page")
+        driver.refresh()
+        days = get_days_list()
+    else:
+        days = get_days_list()
+        
+    last_iteration_day = current_day
     
     while not days:  # è il primo ciclo dopo l'avvio
         print("creating days list")
-        days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+        days = get_days_list()
     [print(f"-- {day}") for day in days]
 
     if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
         print("\nNew week detected, refreshing page\n")
         driver.refresh()
-        bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
-        bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
-        days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+        days = get_days_list()
         [print(f"-- {day}") for day in days]
 
     for day in days:
