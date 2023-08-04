@@ -51,10 +51,10 @@ def get_dates_of_current_week():
 
 #  Open Gaiola window -------------------------------------------------------------------------------
 
-display = Display(visible=0, size=(1366, 768))
-display.start()
+# display = Display(visible=0, size=(1366, 768))
+# display.start()
 
-driver = webdriver.Chrome()
+driver = webdriver.Firefox()
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
@@ -99,6 +99,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text(text)
 
 
+async def start_notify_on_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Notify on days by specifing date and turn like 05/08/2023P"""
+    chat_id = update.effective_message.chat_id
+    user_id = str(update.effective_user.id)
+    print(f"{user_id} started the task")
+    print(os.getenv("MY_ID"))
+    if user_id != str(os.getenv("MY_ID")):
+        await update.effective_message.reply_text("Non dovresti essere qui...")
+    else:
+        if len(context.args) == 1:
+            data_richiesta = context.args[0][:-1]
+            turno_richiesto = context.args[0][-1:].lower()
+
+            if turno_richiesto not in ["m", "p"]:
+                text = f"{turno_richiesto} non è un turno valido, scrivi M o P per mattina o pomeriggio"
+            if check_job_exists(str(chat_id), context):
+                text = f"Bot già avviato. Ricerca data: {data_richiesta} {turno_richiesto}"
+            else:
+                context.job_queue.run_repeating(
+                    check_availability, 
+                    interval=20, 
+                    first=5, 
+                    name=str(chat_id), 
+                    chat_id=chat_id, 
+                    data={
+                            "date": data_richiesta, 
+                            "turn": turno_richiesto
+                        }
+                    )
+                text = f"Bot avviato. Ricerca data: {data_richiesta} {turno_richiesto}"
+        else:
+            text = "Scrivi la data e il turno desiderato separati da spazi (/start 01/01/2000 M/P)"
+        await update.effective_message.reply_text(text)
+
 
 def get_days_list():
     bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
@@ -135,31 +169,68 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
         days = get_days_list()
         [print(f"-- {day}") for day in days]
 
-    for day in days:
+    async def check_single_day(day, turno_richiesto):
         print(f"Checking {day.day_name} {day.date}")
         driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
         day.button.click()
         turns = driver.find_elements(By.NAME, 'turno')
-        for idx, e in enumerate(turns):
-            e.click()
-            sleep(0.1)
-            alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-            turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
-            current_disp = int(alert_posti.text[-1])
-            prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
-            # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
+        if turno_richiesto == Turno.MATTINO:
+            turns[1].click()
+            turns[0].click()
+        elif turno_richiesto == Turno.POMERIGGIO:
+            turns[0].click()
+            turns[1].click()
+        sleep(0.1)
+        alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
+        current_disp = int(alert_posti.text[-1])
+        prev_disp = day.prev_disp_morning if turno_richiesto == Turno.MATTINO else day.prev_disp_noon
+        # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
 
-            print(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
-            if prev_disp == 0 and current_disp != 0:
-                messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
-                print(messaggio_posto_libero)
-                await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
+        print(f"* Posti {turno_richiesto.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
+        if prev_disp == 0 and current_disp != 0:
+            messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno_richiesto.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
+            print(messaggio_posto_libero)
+            await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
 
-            #  aggiornamento disponibilità precedente
-            if turno == Turno.MATTINO:
-                day.prev_disp_morning = current_disp
-            else:
-                day.prev_disp_noon = current_disp
+        #  aggiornamento disponibilità precedente
+        if turno_richiesto == Turno.MATTINO:
+            day.prev_disp_morning = current_disp
+        else:
+            day.prev_disp_noon = current_disp
+
+
+    for day in days:
+        if job.data:
+            print(f"JOB DATA CONTEXT FOUND {job.data}")
+            data_richiesta = job.data['date']
+            turno_richiesto = Turno.MATTINO if job.data['turn'] == "m" else Turno.POMERIGGIO
+            if day.date == data_richiesta:
+                await check_single_day(day, turno_richiesto)
+        else:
+            print(f"Checking {day.day_name} {day.date}")
+            driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
+            day.button.click()
+            turns = driver.find_elements(By.NAME, 'turno')
+            for idx, e in enumerate(turns):
+                e.click()
+                sleep(0.1)
+                alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
+                turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
+                current_disp = int(alert_posti.text[-1])
+                prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
+                # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
+
+                print(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
+                if prev_disp == 0 and current_disp != 0:
+                    messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione"
+                    print(messaggio_posto_libero)
+                    await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
+
+                #  aggiornamento disponibilità precedente
+                if turno == Turno.MATTINO:
+                    day.prev_disp_morning = current_disp
+                else:
+                    day.prev_disp_noon = current_disp
             
     print("-------------\n\n")
 
@@ -171,6 +242,7 @@ def run_bot() -> None:
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("notifyday", start_notify_on_days))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
