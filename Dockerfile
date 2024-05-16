@@ -5,13 +5,13 @@ WORKDIR /app
 # RUN apt-get update && \
 #     apt-get install -y firefox-esr wget gnupg && \
 #     rm -rf /var/lib/apt/lists/*
-RUN apt install firefox
+RUN apt-get install -y firefox
 
 # Install GeckoDriver
 # RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v0.30.0/geckodriver-v0.30.0-linux64.tar.gz -O /tmp/geckodriver.tar.gz && \
 #     tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin && \
 #     rm /tmp/geckodriver.tar.gz
-RUN apt install firefox-geckodriver
+RUN apt-get install -y firefox-geckodriver
 
 # Copy the requirements.txt and install Python dependencies
 COPY requirements.txt requirements.txt
