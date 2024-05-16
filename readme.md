@@ -5,3 +5,10 @@ This is what an example systemd service file, located at ```/etc/systemd/system/
 and then you can enable this program to run on boot with the command:
 
 ```sudo systemctl enable myscript.service```
+
+```sudo cp gaiola_checker.service /etc/systemd/system/gaiola_checker.service && sudo systemctl enable gaiola_checker.service```
+
+
+## Docker
+
+docker build -t gaiola-checker . && docker run -it --rm gaiola-checker 
