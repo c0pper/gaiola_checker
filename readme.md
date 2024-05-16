@@ -11,4 +11,4 @@ and then you can enable this program to run on boot with the command:
 
 ## Docker
 
-docker build --network=host -t gaiola-checker . && docker run -it --rm --network=host --env-file .env gaiola-checker
+docker build --network=host -t gaiola-checker . && docker run -d --network=host --env-file .env --name gaiola-checker gaiola-checker
