@@ -18,7 +18,11 @@ from dotenv import load_dotenv
 
 # Arbitrarily set days that i want to check
 # ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
-chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+chosen_days_str = os.getenv('CHOSEN_DAYS')
+if chosen_days_str:
+    chosen_days = chosen_days_str.split(',')
+else:
+    chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 
 options = Options()
 options.headless = True  # Run in headless mode
