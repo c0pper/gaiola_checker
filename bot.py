@@ -14,6 +14,11 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 
 
+
+# Arbitrarily set days that i want to check
+# ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+
 options = Options()
 options.headless = True  # Run in headless mode
 driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
@@ -216,7 +221,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         else:
             # Arbitrarily decided that i want only weekend days
-            if day.day_name.lower() in ["saturday", "sunday"]:
+            if day.day_name.lower() in chosen_days:
                 logger.info(f"Checking {day.day_name} {day.date}")
                 driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
                 day.button.click()
