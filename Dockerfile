@@ -9,7 +9,7 @@ rm -rf /var/lib/apt/lists/*
 
 # Build and install GeckoDriver for ARM
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-source $HOME/.cargo/env && \
+. $HOME/.cargo/env && \
 git clone https://github.com/mozilla/geckodriver.git && \
 cd geckodriver && \
 cargo build --release && \
