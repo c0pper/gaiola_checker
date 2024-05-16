@@ -6,11 +6,16 @@ import logging
 from enum import Enum
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
 from pyvirtualdisplay import Display
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 
+
+options = Options()
+options.headless = True  # Run in headless mode
+driver = webdriver.Firefox(executable_path='/usr/local/bin/geckodriver', options=options)
 
 @dataclass
 class Day:
