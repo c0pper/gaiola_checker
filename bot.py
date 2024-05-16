@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, date
+import random
 from time import sleep
 from dataclasses import dataclass
 import logging
@@ -130,7 +131,7 @@ async def start_notify_on_days(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 context.job_queue.run_repeating(
                     check_availability, 
-                    interval=20, 
+                    interval=random.randint(17,25), 
                     first=5, 
                     name=str(chat_id), 
                     chat_id=chat_id, 
