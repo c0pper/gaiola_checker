@@ -105,7 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_message.chat_id
     user_id = str(update.effective_user.id)
     logger.info(f"{update.message.from_user.name} started the task (ID: {MY_ID})")
-    logger.info(f"\n\nSelected days for checking: {",".join(chosen_days)}")
+    logger.info(f"\n\nSelected days for checking: {','.join(chosen_days)}")
     if user_id != str(MY_ID):
         await update.effective_message.reply_text("Non dovresti essere qui...")
     else:
