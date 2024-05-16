@@ -7,15 +7,10 @@ apt-get install -y firefox-esr wget gnupg build-essential rustc cargo && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/*
 
-# Build and install GeckoDriver for ARM
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-. $HOME/.cargo/env && \
-git clone https://github.com/mozilla/geckodriver.git && \
-cd geckodriver && \
-cargo build --release && \
-cp target/release/geckodriver /usr/local/bin/ && \
-cd .. && \
-rm -rf geckodriver
+# Download and install GeckoDriver for ARM64
+RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux-aarch64.tar.gz -O /tmp/geckodriver.tar.gz && \
+    tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin && \
+    rm /tmp/geckodriver.tar.gz
 
 # Copy the requirements.txt and install Python dependencies
 COPY requirements.txt requirements.txt
