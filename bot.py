@@ -7,6 +7,7 @@ from enum import Enum
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from pyvirtualdisplay import Display
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -15,7 +16,7 @@ from dotenv import load_dotenv
 
 options = Options()
 options.headless = True  # Run in headless mode
-driver = webdriver.Firefox(executable_path='/usr/local/bin/geckodriver', options=options)
+driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
 
 @dataclass
 class Day:
@@ -61,7 +62,7 @@ def get_dates_of_current_week():
 # display = Display(visible=0, size=(1366, 768))
 # display.start()
 
-driver = webdriver.Firefox()
+
 
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
