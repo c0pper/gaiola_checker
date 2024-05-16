@@ -237,7 +237,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
 
                     logger.info(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
                     if prev_disp == 0 and current_disp != 0:
-                        messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione\n\n"
+                        messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv\n\n"
                         logger.info(messaggio_posto_libero)
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
 
