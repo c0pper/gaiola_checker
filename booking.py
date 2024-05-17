@@ -4,7 +4,7 @@ from selenium.webdriver.common.keys import Keys
 
 def book(driver, selected_people: list, email):
     #  clicca prenota
-    
+    print("ok")
     
     driver.find_element(By.ID, "CheckAvailability_904").click()
     sleep(1)
