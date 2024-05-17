@@ -13,20 +13,20 @@ from pyvirtualdisplay import Display
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
+import platform
+from booking import book
+from data import all_people
 
+load_dotenv()
+TELE_TOKEN = os.getenv('TELE_TOKEN')
+MY_ID = os.getenv("MY_ID")
 
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# Arbitrarily set days that i want to check
-# ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
-chosen_days_str = os.getenv('CHOSEN_DAYS')
-if chosen_days_str:
-    chosen_days = chosen_days_str.split(',')
-else:
-    chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
-
-options = Options()
-options.headless = True  # Run in headless mode
-driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
 
 @dataclass
 class Day:
@@ -47,33 +47,36 @@ class Turno(Enum):
     MATTINO = "Mattino"
     POMERIGGIO = "Pomeriggio"
 
-load_dotenv()
-TELE_TOKEN = os.getenv('TELE_TOKEN')
-MY_ID = os.getenv("MY_ID")
 
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# Arbitrarily set days that i want to check
+# ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+chosen_days_str = os.getenv('CHOSEN_DAYS')
+if chosen_days_str:
+    chosen_days = chosen_days_str.split(',')
+else:
+    chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+
+if platform.system() == "Linux":
+    options = Options()
+    options.headless = True  # Run in headless mode
+    driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
+elif platform.system() == "Windows":
+    driver = webdriver.Firefox()
 
 
-def get_dates_of_current_week():
-    today = datetime.today()
-    start_of_week = today - timedelta(days=today.weekday())
-    dates_of_week = [start_of_week + timedelta(days=i) for i in range(7)]
-    formatted_dates = [date.strftime("%d/%m/%Y") for date in dates_of_week]
-    return formatted_dates
+last_iteration_day = None
+days = None
+
+
+def get_days_list():
+    bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
+    bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
+    days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+    return days
 
 
 
 #  Open Gaiola window -------------------------------------------------------------------------------
-
-# display = Display(visible=0, size=(1366, 768))
-# display.start()
-
-
-
 driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
 print(driver.current_url)
 driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
@@ -85,9 +88,22 @@ for window_handle in driver.window_handles:
         break
 sleep(1)
 print(driver.current_url)
-days = None
-last_iteration_day = None
 
+while not days:  # è il primo ciclo dopo l'avvio
+    logger.info("creating days list")
+    sleep(1)
+    days = get_days_list()
+    
+logger.info(f"\n\nRelevant possible days list:\n{[d.date for d in days]}\n\n")
+logger.info(f"\n\nUser chosen days:\n{chosen_days}\n\n")
+
+
+def get_dates_of_current_week():
+    today = datetime.today()
+    start_of_week = today - timedelta(days=today.weekday())
+    dates_of_week = [start_of_week + timedelta(days=i) for i in range(7)]
+    formatted_dates = [date.strftime("%d/%m/%Y") for date in dates_of_week]
+    return formatted_dates
 
 #  Setup Bot ----------------------------------------------------------------------------------------
 
@@ -100,21 +116,55 @@ def check_job_exists(name: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
         return True
 
 
+async def show_dates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show dates available."""
+    nl = "\n"
+    await update.effective_message.reply_text(f"Date disponibili:\n{nl.join([d.date for d in days])}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Add a job to the queue."""
     chat_id = update.effective_message.chat_id
     user_id = str(update.effective_user.id)
     logger.info(f"{update.message.from_user.name} started the task (ID: {MY_ID})")
     logger.info(f"\n\nSelected days for checking: {','.join(chosen_days)}")
+    
+    
     if user_id != str(MY_ID):
         await update.effective_message.reply_text("Non dovresti essere qui...")
     else:
         if check_job_exists(str(chat_id), context):
             await update.effective_message.reply_text("Bot già avviato")
         else:
-            context.job_queue.run_repeating(check_availability, interval=20, first=5, name=str(chat_id), chat_id=chat_id)
-            text = f"Bot avviato."
-            await update.effective_message.reply_text(text)
+            if len(context.args) == 3:                
+                persona_richiesta = [p for p in all_people if context.args[0].capitalize() in p.name]
+                if persona_richiesta:
+                    persona_richiesta = persona_richiesta[0]
+                    logger.info(f"\nPersona selezionata: {persona_richiesta.name} {persona_richiesta.surname}\n")
+                else:
+                    nl = "\n"
+                    text = f"Persona non trovata. Persone disponibili:\n{nl.join([f'{p.name} {p.surname}' for p in all_people])}"
+                    await update.effective_message.reply_text(text)
+                    
+                date_richieste = context.args[1].split(",")
+                turno_richiesto = context.args[2].lower()
+                
+                context.job_queue.run_repeating(
+                    check_availability, 
+                    interval=20, 
+                    first=5, 
+                    name=str(chat_id), 
+                    chat_id=chat_id, 
+                    data={
+                            "persona_richiesta": persona_richiesta,
+                            "date_richieste": date_richieste, 
+                            "turno_richiesto": turno_richiesto
+                        }
+                )
+                text = f"Bot avviato. Ricerca posti per {persona_richiesta.name} {persona_richiesta.surname} in data {' & '.join(date_richieste)} turno {'pomeriggio' if turno_richiesto == 'm' else 'mattina'}"
+                await update.effective_message.reply_text(text)
+            else:
+                text = "Scrivi la persona, la data e il turno desiderato separati da spazi (/start simone 01/01/2000(o più d'una separate da virgola) M/P)"
+                await update.effective_message.reply_text(text)
 
 
 async def start_notify_on_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -151,13 +201,6 @@ async def start_notify_on_days(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.effective_message.reply_text(text)
 
 
-def get_days_list():
-    bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
-    bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
-    days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
-    return days
-
-
 async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the alarm message."""
     global days
@@ -170,14 +213,11 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.info("New day, refreshing page")
         driver.refresh()
         days = get_days_list()
-    else:
-        days = get_days_list()
+    # else:
+    #     days = get_days_list()
         
     last_iteration_day = current_day
-    
-    while not days:  # è il primo ciclo dopo l'avvio
-        logger.info("creating days list")
-        days = get_days_list()
+
     [logger.info(f"-- {day}") for day in days]
 
     if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
@@ -186,57 +226,26 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
         days = get_days_list()
         [logger.info(f"-- {day}") for day in days]
 
-    async def check_single_day(day, turno_richiesto):
-
-        logger.info(f"Checking {day.day_name} {day.date}")
-        driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
-        day.button.click()
-        turns = driver.find_elements(By.NAME, 'turno')
-        if turno_richiesto == Turno.MATTINO:
-            turns[1].click()
-            turns[0].click()
-        elif turno_richiesto == Turno.POMERIGGIO:
-            turns[0].click()
-            turns[1].click()
-        sleep(0.1)
-        alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-        current_disp = int(alert_posti.text[-1])
-        prev_disp = day.prev_disp_morning if turno_richiesto == Turno.MATTINO else day.prev_disp_noon
-        # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
-
-        logger.info(f"* Posti {turno_richiesto.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
-        if prev_disp == 0 and current_disp != 0:
-            messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno_richiesto.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv"
-            print(messaggio_posto_libero)
-            await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
-
-        #  aggiornamento disponibilità precedente
-        if turno_richiesto == Turno.MATTINO:
-            day.prev_disp_morning = current_disp
-        else:
-            day.prev_disp_noon = current_disp
-
-
+    persona_richiesta = job.data["persona_richiesta"]
+    date_richieste = job.data['date_richieste']
+    turno_richiesto = Turno.MATTINO if job.data['turno_richiesto'] == "m" else Turno.POMERIGGIO
+    
     for day in days:
-        if job.data:
-            logger.info(f"JOB DATA CONTEXT FOUND {job.data}")
-            data_richiesta = job.data['date']
-            turno_richiesto = Turno.MATTINO if job.data['turn'] == "m" else Turno.POMERIGGIO
-            if day.date == data_richiesta:
-                await check_single_day(day, turno_richiesto)
-
-        else:
-            # Arbitrarily decided that i want only weekend days
-            if day.day_name.lower() in chosen_days:
-                logger.info(f"Checking {day.day_name} {day.date}")
-                driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
-                day.button.click()
-                turns = driver.find_elements(By.NAME, 'turno')
-                for idx, e in enumerate(turns):
+        # if day.date == data_richiesta:
+        #     await check_single_day(day, turno_richiesto)
+        
+        # Arbitrarily decided that i want only weekend days
+        if day.date in date_richieste:
+            logger.info(f"Checking {day.day_name} {day.date}")
+            driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
+            day.button.click()
+            turns = driver.find_elements(By.NAME, 'turno')
+            for idx, e in enumerate(turns):
+                turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
+                if turno == turno_richiesto:
                     e.click()
                     sleep(0.1)
                     alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-                    turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
                     current_disp = int(alert_posti.text[-1])
                     prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
                     # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
@@ -246,24 +255,63 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                         messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv\n\n"
                         logger.info(messaggio_posto_libero)
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
+                        
+                        current_jobs = context.job_queue.get_jobs_by_name(str(context._chat_id))
+                        for job in current_jobs:
+                            job.schedule_removal()
+                        book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
 
-                    #  aggiornamento disponibilità precedente
-                    if turno == Turno.MATTINO:
-                        day.prev_disp_morning = current_disp
-                    else:
-                        day.prev_disp_noon = current_disp
+                #  aggiornamento disponibilità precedente
+                if turno == Turno.MATTINO:
+                    day.prev_disp_morning = current_disp
+                else:
+                    day.prev_disp_noon = current_disp
             
     print("\n\n-------------\n\n")
 
 
+async def check_single_day(day, turno_richiesto):
+
+    logger.info(f"Checking {day.day_name} {day.date}")
+    driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
+    day.button.click()
+    turns = driver.find_elements(By.NAME, 'turno')
+    if turno_richiesto == Turno.MATTINO:
+        turns[1].click()
+        turns[0].click()
+    elif turno_richiesto == Turno.POMERIGGIO:
+        turns[0].click()
+        turns[1].click()
+    sleep(0.1)
+    alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
+    current_disp = int(alert_posti.text[-1])
+    prev_disp = day.prev_disp_morning if turno_richiesto == Turno.MATTINO else day.prev_disp_noon
+    # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
+
+    logger.info(f"* Posti {turno_richiesto.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
+    if prev_disp == 0 and current_disp != 0:
+        messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno_richiesto.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv"
+        print(messaggio_posto_libero)
+        await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
+
+    #  aggiornamento disponibilità precedente
+    if turno_richiesto == Turno.MATTINO:
+        day.prev_disp_morning = current_disp
+    else:
+        day.prev_disp_noon = current_disp
+
+
 def run_bot() -> None:
     """Run bot."""
+    
+    
     # Create the Application and pass it your bot's token.
     application = Application.builder().token(TELE_TOKEN).build()
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("notifyday", start_notify_on_days))
+    application.add_handler(CommandHandler("showdates", show_dates))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
