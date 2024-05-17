@@ -260,6 +260,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                         for job in current_jobs:
                             job.schedule_removal()
                         book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                        await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name})")
 
                 #  aggiornamento disponibilità precedente
                 if turno == Turno.MATTINO:
