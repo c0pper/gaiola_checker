@@ -16,6 +16,6 @@ RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v0.34.0/gec
 # Copy the requirements.txt and install Python dependencies
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
-COPY . ./
+COPY . .
 
 CMD [ "python3", "./bot.py"]
