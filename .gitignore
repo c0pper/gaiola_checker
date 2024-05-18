@@ -1,4 +1,6 @@
 /.env
 /geckodriver.log
 /venv
+/.venv
 /__pycache__
+/data.py

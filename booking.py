@@ -24,6 +24,8 @@ def book(driver, selected_people: list, email):
 
         data_nascita = driver.find_element(By.ID, f"data_nascita_{idx}")
         driver.execute_script("arguments[0].scrollIntoView(true);", data_nascita)
+        data_nascita.click()
+        # data_nascita.send_keys("2012-12-24")
         data_nascita.send_keys(p.bday)
 
         comune_nascita = driver.find_element(By.CSS_SELECTOR, f"[aria-labelledby=select2-comune_nascita_{idx}-container]")
@@ -38,9 +40,27 @@ def book(driver, selected_people: list, email):
         driver.execute_script("arguments[0].scrollIntoView(true);", comune_nascita)
         cf.send_keys(p.cf)
 
-        email = driver.find_element(By.ID, f"email_{idx}")
-        driver.execute_script("arguments[0].scrollIntoView(true);", email)
-        email.send_keys(email)
+        email_field = driver.find_element(By.ID, f"email_{idx}")
+        driver.execute_script("arguments[0].scrollIntoView(true);", email_field)
+        email_field.send_keys(email)
+
+        stato_residenza = driver.find_element(By.CSS_SELECTOR, f"[aria-labelledby=select2-stato_residenza_{idx}-container]")
+        driver.execute_script("arguments[0].scrollIntoView(true);", stato_residenza)
+        stato_residenza.click()
+        stato_residenza.send_keys("Italia")
+        stato_residenza.send_keys(Keys.RETURN)
+
+        regione_residenza = driver.find_element(By.CSS_SELECTOR, f"[aria-labelledby=select2-regione_residenza_{idx}-container]")
+        driver.execute_script("arguments[0].scrollIntoView(true);", regione_residenza)
+        regione_residenza.click()
+        regione_residenza.send_keys("CAMPANIA")
+        regione_residenza.send_keys(Keys.RETURN)
+
+        provincia_residenza = driver.find_element(By.CSS_SELECTOR, f"[aria-labelledby=select2-provincia_residenza_{idx}-container]")
+        driver.execute_script("arguments[0].scrollIntoView(true);", provincia_residenza)
+        provincia_residenza.click()
+        provincia_residenza.send_keys("Napoli")
+        provincia_residenza.send_keys(Keys.RETURN)
 
         comune_residenza = driver.find_element(By.CSS_SELECTOR, f"[aria-labelledby=select2-comune_residenza_{idx}-container]")
         driver.execute_script("arguments[0].scrollIntoView(true);", comune_residenza)

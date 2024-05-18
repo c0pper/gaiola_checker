@@ -56,12 +56,14 @@ if chosen_days_str:
 else:
     chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 
-if platform.system() == "Linux":
-    options = Options()
-    options.headless = True  # Run in headless mode
-    driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
-elif platform.system() == "Windows":
-    driver = webdriver.Firefox()
+# if platform.system() == "Linux":
+#     options = Options()
+#     options.headless = True  # Run in headless mode
+#     driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
+# elif platform.system() == "Windows":
+#     driver = webdriver.Firefox()
+
+driver = webdriver.Firefox()
 
 
 last_iteration_day = None
@@ -166,7 +168,7 @@ async def select_shift(update: Update, context: CallbackContext) -> None:
     selected_shift = query.data.split('_')[-1]
     if selected_shift == "m":
         context.user_data['selected_shift'] = [Turno.MATTINO] 
-    elif selected_shift == "m": 
+    elif selected_shift == "p": 
         context.user_data['selected_shift'] = [Turno.POMERIGGIO]
     elif selected_shift == "mp": 
         context.user_data['selected_shift'] = [Turno.POMERIGGIO, Turno.MATTINO]
@@ -196,8 +198,8 @@ async def select_date(update: Update, context: CallbackContext) -> None:
     
     context.job_queue.run_repeating(
         check_availability, 
-        interval=20, 
-        first=5, 
+        interval=5, 
+        first=1, 
         name=str(chat_id), 
         chat_id=chat_id, 
         data={
@@ -305,11 +307,11 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                             await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
                             
                             #TODO
-                            # current_jobs = context.job_queue.get_jobs_by_name(str(context._chat_id))
-                            # for job in current_jobs:
-                            #     job.schedule_removal()
-                            # book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
-                            # await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name})")
+                            current_jobs = context.job_queue.get_jobs_by_name(str(context._chat_id))
+                            for job in current_jobs:
+                                job.schedule_removal()
+                            book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                            await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name})")
                     else: # avvisa ugualmente se il posto c'è ma non nel turno richiesto
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
 
