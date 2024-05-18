@@ -56,14 +56,14 @@ if chosen_days_str:
 else:
     chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 
-# if platform.system() == "Linux":
-#     options = Options()
-#     options.headless = True  # Run in headless mode
-#     driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
-# elif platform.system() == "Windows":
-#     driver = webdriver.Firefox()
+if platform.system() == "Linux":
+    options = Options()
+    options.headless = True  # Run in headless mode
+    driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
+elif platform.system() == "Windows":
+    driver = webdriver.Firefox()
 
-driver = webdriver.Firefox()
+# driver = webdriver.Firefox()
 
 
 last_iteration_day = None
@@ -198,8 +198,8 @@ async def select_date(update: Update, context: CallbackContext) -> None:
     
     context.job_queue.run_repeating(
         check_availability, 
-        interval=5, 
-        first=1, 
+        interval=15, 
+        first=3, 
         name=str(chat_id), 
         chat_id=chat_id, 
         data={
