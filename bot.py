@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import platform
 from booking import book
 from data import all_people
+from helpers import save_to_json, find_code_by_name, delete_booking_file
 
 load_dotenv()
 TELE_TOKEN = os.getenv('TELE_TOKEN')
@@ -56,14 +57,27 @@ if chosen_days_str:
 else:
     chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 
-if platform.system() == "Linux":
-    options = Options()
-    options.headless = True  # Run in headless mode
-    driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
-elif platform.system() == "Windows":
-    driver = webdriver.Firefox()
 
-# driver = webdriver.Firefox()
+def is_raspberry_pi():
+    try:
+        with open('/proc/cpuinfo', 'r') as cpuinfo:
+            if 'Raspberry Pi' in cpuinfo.read():
+                return True
+    except FileNotFoundError:
+        pass
+    return False
+
+
+def get_driver():
+    if is_raspberry_pi():
+        options = Options()
+        options.headless = True  # Run in headless mode
+        driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
+    else:
+        driver = webdriver.Firefox()
+    return driver
+
+driver = get_driver()
 
 
 last_iteration_day = None
@@ -79,17 +93,18 @@ def get_days_list():
 
 
 #  Open Gaiola window -------------------------------------------------------------------------------
-driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
-print(driver.current_url)
-driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
-driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
-original_window = driver.current_window_handle
-for window_handle in driver.window_handles:
-    if window_handle != original_window:
-        driver.switch_to.window(window_handle)
-        break
-sleep(1)
-print(driver.current_url)
+# driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
+driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+# print(driver.current_url)
+# driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
+# driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
+# original_window = driver.current_window_handle
+# for window_handle in driver.window_handles:
+#     if window_handle != original_window:
+#         driver.switch_to.window(window_handle)
+#         break
+# sleep(1)
+# print(driver.current_url)
 
 while not days:  # è il primo ciclo dopo l'avvio
     logger.info("creating days list")
@@ -97,7 +112,7 @@ while not days:  # è il primo ciclo dopo l'avvio
     days = get_days_list()
     
 logger.info(f"\n\nRelevant possible days list:\n{[d.date for d in days]}\n\n")
-logger.info(f"\n\nUser chosen days:\n{chosen_days}\n\n")
+# logger.info(f"\n\nUser chosen days:\n{chosen_days}\n\n")
 
 
 def get_dates_of_current_week():
@@ -158,7 +173,7 @@ async def select_person(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text("Seleziona il turno:", reply_markup=reply_markup)
+    await query.edit_message_text(f"Persona selezionata:\n{context.user_data['selected_person'].name}\n\nSeleziona il turno:", reply_markup=reply_markup)
 
 
 async def select_shift(update: Update, context: CallbackContext) -> None:
@@ -180,7 +195,7 @@ async def select_shift(update: Update, context: CallbackContext) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Assuming date selection is handled separately, for simplicity
-    await query.edit_message_text("Seleziona la data:", reply_markup=reply_markup)
+    await query.edit_message_text(f"Turno selezionato:\n{','.join([t.name for t in context.user_data['selected_shift']])}\n\nSeleziona la data:", reply_markup=reply_markup)
 
 
 async def select_date(update: Update, context: CallbackContext) -> None:
@@ -196,11 +211,12 @@ async def select_date(update: Update, context: CallbackContext) -> None:
     
     chat_id = update.effective_message.chat_id
     
+    
     context.job_queue.run_repeating(
         check_availability, 
         interval=15, 
         first=3, 
-        name=str(chat_id), 
+        name=f"{update.effective_chat.username} booking for {persona_richiesta.name} for {data_richiesta} - {turno_richiesto}", 
         chat_id=chat_id, 
         data={
             "persona_richiesta": persona_richiesta,
@@ -213,57 +229,16 @@ async def select_date(update: Update, context: CallbackContext) -> None:
             f"in data {' & '.join(data_richiesta)} turno {' / '.join([t.name for t in turno_richiesto])}")
     await update.effective_message.reply_text(text)
 
-        
-
-
-async def start_notify_on_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Notify on days by specifing date and turn like 05/08/2023P"""
-    chat_id = update.effective_message.chat_id
-    user_id = str(update.effective_user.id)
-    print(f"{user_id} started the task (ID: {MY_ID})")
-    if user_id != str(MY_ID):
-        await update.effective_message.reply_text("Non dovresti essere qui...")
-    else:
-        if len(context.args) == 1:
-            data_richiesta = context.args[0][:-1]
-            turno_richiesto = context.args[0][-1:].lower()
-
-            if turno_richiesto not in ["m", "p"]:
-                text = f"{turno_richiesto} non è un turno valido, scrivi M o P per mattina o pomeriggio"
-            if check_job_exists(str(chat_id), context):
-                text = f"Bot già avviato. Ricerca data: {data_richiesta} {turno_richiesto}"
-            else:
-                context.job_queue.run_repeating(
-                    check_availability, 
-                    interval=random.randint(17,25), 
-                    first=5, 
-                    name=str(chat_id), 
-                    chat_id=chat_id, 
-                    data={
-                            "date": data_richiesta, 
-                            "turn": turno_richiesto
-                        }
-                    )
-                text = f"Bot avviato. Ricerca data: {data_richiesta} {turno_richiesto}"
-        else:
-            text = "Scrivi la data e il turno desiderato separati da spazi (/start 01/01/2000 M/P)"
-        await update.effective_message.reply_text(text)
-
-
 async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the alarm message."""
-    global days
+    driver.refresh()
+    driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+    days = get_days_list()
+
     global last_iteration_day
     job = context.job
 
     current_day = date.today()
-    logger.info(f"Current day: {current_day}, Last iteration day: {last_iteration_day}")
-    if last_iteration_day and last_iteration_day != current_day: # se è un nuovo giorno refreshiamo la pagina
-        logger.info("New day, refreshing page")
-        driver.refresh()
-        days = get_days_list()
-    # else:
-    #     days = get_days_list()
         
     last_iteration_day = current_day
 
@@ -280,10 +255,6 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     turno_richiesto = job.data['turno_richiesto']
     
     for day in days:
-        # if day.date == data_richiesta:
-        #     await check_single_day(day, turno_richiesto)
-        
-        # Arbitrarily decided that i want only weekend days
         if day.date in date_richieste:
             logger.info(f"\n\nChecking {day.day_name} {day.date} for {persona_richiesta.name}")
             driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
@@ -294,7 +265,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                 e.click()
                 sleep(0.1)
                 alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-                current_disp = int(alert_posti.text[-1])
+                current_disp = int(alert_posti.text.split(":")[1])
                 prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
                 # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
 
@@ -307,11 +278,17 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                             await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
                             
                             #TODO
-                            current_jobs = context.job_queue.get_jobs_by_name(str(context._chat_id))
+                            current_jobs = context.job_queue.get_jobs_by_name(job.name)
                             for job in current_jobs:
                                 job.schedule_removal()
                             book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
-                            await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name})")
+                            code = driver.current_url.split('prenotazione=')[1]
+                            await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name}) Codice: {code}")
+
+                            save_to_json(persona_richiesta.name, code)
+                            header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
+                            header_link.click()
+                    
                     else: # avvisa ugualmente se il posto c'è ma non nel turno richiesto
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
 
@@ -337,35 +314,43 @@ async def delete_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     logger.info(f"Current jobs: {current_jobs}")
 
 
-async def check_single_day(day, turno_richiesto):
+#WIP
+async def delete_booking(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [
+        [InlineKeyboardButton(p.name, callback_data=f"select_person_to_delete_{p.name}")] for p in all_people
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)    
+    await update.effective_message.reply_text("Seleziona la persona di cui eliminare la prenotazione:", reply_markup=reply_markup)
 
-    logger.info(f"Checking {day.day_name} {day.date}")
-    driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
-    day.button.click()
-    turns = driver.find_elements(By.NAME, 'turno')
-    if turno_richiesto == Turno.MATTINO:
-        turns[1].click()
-        turns[0].click()
-    elif turno_richiesto == Turno.POMERIGGIO:
-        turns[0].click()
-        turns[1].click()
-    sleep(0.1)
-    alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-    current_disp = int(alert_posti.text[-1])
-    prev_disp = day.prev_disp_morning if turno_richiesto == Turno.MATTINO else day.prev_disp_noon
-    # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
 
-    logger.info(f"* Posti {turno_richiesto.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
-    if prev_disp == 0 and current_disp != 0:
-        messaggio_posto_libero = f"Posto liberato {day.day_name} {day.date} {turno_richiesto.value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv"
-        print(messaggio_posto_libero)
-        await context.bot.send_message(job.chat_id, text=messaggio_posto_libero)
+#WIP
+async def select_person_to_delete(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()
 
-    #  aggiornamento disponibilità precedente
-    if turno_richiesto == Turno.MATTINO:
-        day.prev_disp_morning = current_disp
+    selected_person_name = query.data.split('_')[-1]
+    person_obj = next(p for p in all_people if p.name == selected_person_name)
+    code = find_code_by_name(person_obj.name)
+    
+    cancellation_url = f"https://booking.areamarinaprotettagaiola.it/booking/prenotazione_cancella.php?action=2&id={code}&cf={person_obj.cf}"
+    logger.info(cancellation_url)
+    driver.get(cancellation_url)
+    delete_booking_file(person_obj.name, code)
+    
+    await update.effective_message.reply_text(f"Prenotazione per {context.user_data['selected_person'].name} cancellata")
+
+
+async def show_current_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    current_jobs = context.job_queue.jobs()
+    if current_jobs:
+        for job in current_jobs:
+            jobs_str = "\n\n".join([job.name for job in current_jobs])
+            job.schedule_removal()
+            logger.info(jobs_str)
+            await context.bot.send_message(job.chat_id, text=jobs_str)
     else:
-        day.prev_disp_noon = current_disp
+        await context.bot.send_message(update.effective_message.chat_id, text=f"No jobs active")
+    logger.info(f"Current jobs: {current_jobs}")
 
 
 def run_bot() -> None:
@@ -376,13 +361,15 @@ def run_bot() -> None:
     application = Application.builder().token(TELE_TOKEN).build()
 
     # on different commands - answer in Telegram
+    application.add_handler(CommandHandler("deletebooking", delete_booking))
+    application.add_handler(CallbackQueryHandler(select_person_to_delete, pattern="^select_person_to_delete_"))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("deletejobs", delete_jobs))
     application.add_handler(CommandHandler("showdates", show_dates))
     application.add_handler(CallbackQueryHandler(select_person, pattern="^select_person_"))
     application.add_handler(CallbackQueryHandler(select_shift, pattern="^select_shift_"))
     application.add_handler(CallbackQueryHandler(select_date, pattern="^select_date_"))
-    application.add_handler(CommandHandler("notifyday", start_notify_on_days))
+    application.add_handler(CommandHandler("showcurrentjobs", show_current_jobs))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
