@@ -13,6 +13,9 @@ RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v0.34.0/gec
     chmod +x /usr/local/bin/geckodriver && \
     rm /tmp/geckodriver.tar.gz
 
+# Create the "bookings" directory
+RUN mkdir -p bookings
+
 # Copy the requirements.txt and install Python dependencies
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
