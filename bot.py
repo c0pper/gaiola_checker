@@ -152,6 +152,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if check_job_exists(str(chat_id), context):
             await update.effective_message.reply_text("Bot già avviato")
     
+        global days
+        driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+        days = get_days_list()
+        
         keyboard = [
             [InlineKeyboardButton(p.name, callback_data=f"select_person_{p.name}")] for p in all_people
         ]
@@ -214,7 +218,7 @@ async def select_date(update: Update, context: CallbackContext) -> None:
     
     context.job_queue.run_repeating(
         check_availability, 
-        interval=15, 
+        interval=10, 
         first=3, 
         name=f"{update.effective_chat.username} booking for {persona_richiesta.name} for {data_richiesta} - {turno_richiesto}", 
         chat_id=chat_id, 
@@ -231,11 +235,9 @@ async def select_date(update: Update, context: CallbackContext) -> None:
 
 async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the alarm message."""
-    driver.refresh()
-    driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
-    days = get_days_list()
 
     global last_iteration_day
+    global days
     job = context.job
 
     current_day = date.today()
@@ -278,16 +280,16 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                             await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
                             
                             #TODO
+                            book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                            code = driver.current_url.split('prenotazione=')[1]
+                            header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
+                            header_link.click()
                             current_jobs = context.job_queue.get_jobs_by_name(job.name)
                             for job in current_jobs:
                                 job.schedule_removal()
-                            book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
-                            code = driver.current_url.split('prenotazione=')[1]
                             await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name}) Codice: {code}")
 
                             save_to_json(persona_richiesta.name, code)
-                            header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
-                            header_link.click()
                     
                     else: # avvisa ugualmente se il posto c'è ma non nel turno richiesto
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
@@ -317,7 +319,7 @@ async def delete_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 #WIP
 async def delete_booking(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
-        [InlineKeyboardButton(p.name, callback_data=f"select_person_to_delete_{p.name}")] for p in all_people
+        [InlineKeyboardButton(p.replace("_", " ").replace(".json", ""), callback_data=f"select_person_to_delete_{p.split('_')[0]}")] for p in  os.listdir("bookings")
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)    
     await update.effective_message.reply_text("Seleziona la persona di cui eliminare la prenotazione:", reply_markup=reply_markup)
@@ -337,7 +339,7 @@ async def select_person_to_delete(update: Update, context: CallbackContext) -> N
     driver.get(cancellation_url)
     delete_booking_file(person_obj.name, code)
     
-    await update.effective_message.reply_text(f"Prenotazione per {context.user_data['selected_person'].name} cancellata")
+    await update.effective_message.reply_text(f"Prenotazione per {person_obj.name} cancellata")
 
 
 async def show_current_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
