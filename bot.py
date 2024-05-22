@@ -318,7 +318,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def delete_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    current_jobs = context.job_queue.get_jobs_by_name(str(context._chat_id))
+    current_jobs = context.job_queue.jobs()
     if current_jobs:
         for job in current_jobs:
             job.schedule_removal()
@@ -332,11 +332,15 @@ async def delete_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 #WIP
 async def delete_booking(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [InlineKeyboardButton(p.replace("_", " ").replace(".json", ""), callback_data=f"select_person_to_delete_{p.split('_')[0]}")] for p in  os.listdir("bookings")
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)    
-    await update.effective_message.reply_text("Seleziona la persona di cui eliminare la prenotazione:", reply_markup=reply_markup)
+    bookings = os.listdir("bookings")
+    if bookings:
+        keyboard = [
+            [InlineKeyboardButton(p.replace("_", " ").replace(".json", ""), callback_data=f"select_person_to_delete_{p.split('_')[0]}")] for p in bookings
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)    
+        await update.effective_message.reply_text("Seleziona la persona di cui eliminare la prenotazione:", reply_markup=reply_markup)
+    else:
+        await update.effective_message.reply_text("Nessuna prenotazione da cancellare")
 
 
 #WIP
@@ -345,15 +349,24 @@ async def select_person_to_delete(update: Update, context: CallbackContext) -> N
     await query.answer()
 
     selected_person_name = query.data.split('_')[-1]
-    person_obj = next(p for p in all_people if p.name == selected_person_name)
+    person_list = [p for p in all_people if p.name.lower() == selected_person_name.lower()]
+
+    if not person_list:
+        await update.effective_message.reply_text(f"Person named {selected_person_name} not found.")
+        return
+    
+    person_obj = person_list[0]
     code = find_code_by_name(person_obj.name)
     
-    cancellation_url = f"https://booking.areamarinaprotettagaiola.it/booking/prenotazione_cancella.php?action=2&id={code}&cf={person_obj.cf}"
+    cancellation_url = f"https://booking.areamarinaprotettagaiola.it/booking/prenotazione_cancella.php?action=2&id={code.replace('.json', '')}&cf={person_obj.cf}"
     logger.info(cancellation_url)
     driver.get(cancellation_url)
-    delete_booking_file(person_obj.name, code)
+    delete_status = delete_booking_file(person_obj.name, code)
     
-    await update.effective_message.reply_text(f"Prenotazione per {person_obj.name} cancellata")
+    if delete_status:
+        await update.effective_message.reply_text(f"Prenotazione per {person_obj.name} cancellata")
+    else:
+        await update.effective_message.reply_text(f"Errore nella cancellazione")
 
 
 async def show_current_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
