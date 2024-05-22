@@ -91,6 +91,11 @@ def get_days_list():
     return days
 
 
+def has_day_changed(current_day):
+    """Check if the day has changed compared to the last iteration day."""
+    global last_iteration_day
+    return current_day != last_iteration_day
+
 
 #  Open Gaiola window -------------------------------------------------------------------------------
 # driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
@@ -138,6 +143,7 @@ async def show_dates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     nl = "\n"
     await update.effective_message.reply_text(f"Date disponibili:\n{nl.join([d.date for d in days])}")
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Add a job to the queue."""
     chat_id = update.effective_message.chat_id
@@ -153,6 +159,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("Bot già avviato")
     
         global days
+        global last_iteration_day
+        current_day = date.today()
+        last_iteration_day = current_day
         driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
         days = get_days_list()
         
@@ -241,16 +250,20 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
     job = context.job
 
     current_day = date.today()
+    if has_day_changed(current_day):
+        logger.info("\nNew day, refreshing page\n")
+        driver.refresh()
+        days = get_days_list()
+        last_iteration_day = current_day
         
-    last_iteration_day = current_day
 
     [logger.info(f"-- {day}") for day in days]
 
-    if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
-        logger.info("\nNew week detected, refreshing page\n")
-        driver.refresh()
-        days = get_days_list()
-        [logger.info(f"-- {day}") for day in days]
+    # if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
+    #     logger.info("\nNew week detected, refreshing page\n")
+    #     driver.refresh()
+    #     days = get_days_list()
+    #     [logger.info(f"-- {day}") for day in days]
 
     persona_richiesta = job.data["persona_richiesta"]
     date_richieste = job.data['date_richieste']
