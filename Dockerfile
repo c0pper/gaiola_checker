@@ -1,6 +1,8 @@
 FROM python:3.10
 WORKDIR /app
 
+ENV TZ="Europe/Rome"
+
 ## Install Firefox and other dependencies
 RUN apt-get update && \
 apt-get install -y firefox-esr wget gnupg build-essential rustc cargo && \

@@ -258,7 +258,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
         last_iteration_day = current_day
         
 
-    [logger.info(f"-- {day}") for day in days]
+    [print(f"-- {day}") for day in days]
 
     # if days[-1].date not in get_dates_of_current_week():  # è una nuova settimana 
     #     logger.info("\nNew week detected, refreshing page\n")
