@@ -287,26 +287,23 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
 
                 logger.info(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
                 if prev_disp == 0 and current_disp != 0:
-                    messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://booking.areamarinaprotettagaiola.it/booking/\n\n"
-                    logger.info(messaggio_posto_libero)
                         
                     if turno in turno_richiesto:
-                            await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
-                            
-                            #TODO
-                            book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
-                            code = driver.current_url.split('prenotazione=')[1]
-                            header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
-                            header_link.click()
-                            current_jobs = context.job_queue.get_jobs_by_name(job.name)
-                            for job in current_jobs:
-                                job.schedule_removal()
-                            await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name}) Codice: {code}")
-
-                            save_to_json(persona_richiesta.name, code)
-                    
-                    else: # avvisa ugualmente se il posto c'è ma non nel turno richiesto
+                        messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://booking.areamarinaprotettagaiola.it/booking/\n\n"
+                        logger.info(messaggio_posto_libero)
                         await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
+                        
+                        #TODO
+                        book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                        code = driver.current_url.split('prenotazione=')[1]
+                        header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
+                        header_link.click()
+                        current_jobs = context.job_queue.get_jobs_by_name(job.name)
+                        for job in current_jobs:
+                            job.schedule_removal()
+                        await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name}) Codice: {code}")
+
+                        save_to_json(persona_richiesta.name, code)
 
                 #  aggiornamento disponibilità precedente
                 if turno == Turno.MATTINO:
