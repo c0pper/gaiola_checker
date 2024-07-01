@@ -301,6 +301,7 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
                         
                         #TODO
                         book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                        sleep(10)
                         code = driver.current_url.split('prenotazione=')[1]
                         header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
                         header_link.click()
