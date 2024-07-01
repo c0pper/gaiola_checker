@@ -99,19 +99,22 @@ def has_day_changed(current_day):
 
 
 #  Open Gaiola window -------------------------------------------------------------------------------
-# driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
-driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
-# print(driver.current_url)
-# driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
-# driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
-# original_window = driver.current_window_handle
-# for window_handle in driver.window_handles:
-#     if window_handle != original_window:
-#         driver.switch_to.window(window_handle)
-#         break
-# sleep(1)
-# print(driver.current_url)
+# driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+def open_bookings_page():
+    driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
+    print(driver.current_url)
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
+    driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
+    original_window = driver.current_window_handle
+    for window_handle in driver.window_handles:
+        if window_handle != original_window:
+            driver.switch_to.window(window_handle)
+            break
+    sleep(1)
+    print(driver.current_url)
 
+
+open_bookings_page()
 while not days:  # è il primo ciclo dopo l'avvio
     logger.info("creating days list")
     sleep(1)
@@ -142,7 +145,8 @@ def check_job_exists(name: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
 async def show_dates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show dates available."""
     nl = "\n"
-    await update.effective_message.reply_text(f"Date disponibili:\n{nl.join([d.date for d in days])}")
+    dates = get_dates_of_current_week()
+    await update.effective_message.reply_text(f"Date disponibili:\n{nl.join(dates)}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -163,7 +167,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         global last_iteration_day
         current_day = date.today()
         last_iteration_day = current_day
-        driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+        # driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
+        if "booking" not in driver.current_url:
+            open_bookings_page()
         days = get_days_list()
         
         keyboard = [
