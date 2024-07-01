@@ -281,42 +281,55 @@ async def check_availability(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info(f"\n\nChecking {day.day_name} {day.date} for {persona_richiesta.name}")
             driver.execute_script("arguments[0].scrollIntoView(true);", day.button)
             day.button.click()
-            turns = driver.find_elements(By.NAME, 'turno')
-            for idx, e in enumerate(turns):
-                turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
-                e.click()
-                sleep(0.1)
-                alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
-                current_disp = int(alert_posti.text.split(":")[1])
-                prev_disp = day.prev_disp_morning if turno == Turno.MATTINO else day.prev_disp_noon
-                # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
+            # turns = driver.find_elements(By.NAME, 'turno')
+            # for idx, e in enumerate(turns):
+                # turno = Turno.MATTINO if idx == 0 else Turno.POMERIGGIO
+                # if turno in turno_richiesto:
+                    # e.click()
+                    # sleep(0.1)
+            if turno_richiesto[0].name == "POMERIGGIO":
+                requested_radio_button = driver.find_element(By.CSS_SELECTOR, "[for='904_turno_2']")
+                other_radio_button = driver.find_element(By.CSS_SELECTOR, "[for='904_turno_1']")
+            else:
+                requested_radio_button = driver.find_element(By.CSS_SELECTOR, "[for='904_turno_1']")
+                other_radio_button = driver.find_element(By.CSS_SELECTOR, "[for='904_turno_2']")
+            
+            other_radio_button.click()
+            alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
+            unwanted_current_disp = int(alert_posti.text.split(":")[1])
+            sleep(0.4)
+            requested_radio_button.click()
 
-                logger.info(f"* Posti {turno.value.lower()}: {str(current_disp)} (originale: {prev_disp})")
-                if prev_disp == 0 and current_disp != 0:
-                        
-                    if turno in turno_richiesto:
-                        messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno.value}\nPrenota: https://booking.areamarinaprotettagaiola.it/booking/\n\n"
-                        logger.info(messaggio_posto_libero)
-                        await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
-                        
-                        #TODO
-                        book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
-                        sleep(10)
-                        code = driver.current_url.split('prenotazione=')[1]
-                        header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
-                        header_link.click()
-                        current_jobs = context.job_queue.get_jobs_by_name(job.name)
-                        for job in current_jobs:
-                            job.schedule_removal()
-                        await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno.name}) Codice: {code}")
+            alert_posti = driver.find_element(By.ID, "disponibilita_effettiva")
+            current_disp = int(alert_posti.text.split(":")[1])
+            prev_disp = day.prev_disp_morning if turno_richiesto[0] == Turno.MATTINO else day.prev_disp_noon
+            # new_disp = day.new_disp_morning if turno == Turno.MATTINO else day.new_disp_noon
 
-                        save_to_json(persona_richiesta.name, code)
+            logger.info(f"* Posti {turno_richiesto[0].value.lower()}: {str(current_disp)} (originale: {prev_disp})")
+            if prev_disp == 0 and current_disp != 0 and current_disp != unwanted_current_disp:
+                
+                messaggio_posto_libero = f"\n\nPosto liberato {day.day_name} {day.date} {turno_richiesto[0].value}\nPrenota: https://www.areamarinaprotettagaiola.it/prenotazione#comp-l4zkd4tv\n\n"
+                logger.info(messaggio_posto_libero)
+                await context.bot.send_message(job.chat_id, text=messaggio_posto_libero.strip())
+                
+                #TODO
+                book(driver=driver, selected_people=[persona_richiesta], email=os.getenv("EMAIL"))
+                sleep(30)
+                code = driver.current_url.split('prenotazione=')[1]
+                header_link = driver.find_element(By.CSS_SELECTOR, ".navbar-brand")
+                header_link.click()
+                current_jobs = context.job_queue.get_jobs_by_name(job.name)
+                for job in current_jobs:
+                    job.schedule_removal()
+                await context.bot.send_message(job.chat_id, text=f"Posto prenotato per {persona_richiesta.name} in data {day.date} ({turno_richiesto[0].name}) Codice: {code}")
 
-                #  aggiornamento disponibilità precedente
-                if turno == Turno.MATTINO:
-                    day.prev_disp_morning = current_disp
-                else:
-                    day.prev_disp_noon = current_disp
+                save_to_json(persona_richiesta.name, code)
+
+            #  aggiornamento disponibilità precedente
+            if turno_richiesto[0] == Turno.MATTINO:
+                day.prev_disp_morning = current_disp
+            else:
+                day.prev_disp_noon = current_disp
             
     print("\n\n-------------\n\n")
 
