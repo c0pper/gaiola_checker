@@ -88,7 +88,12 @@ days = None
 def get_days_list():
     bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
     bottoni_data_validi = [btn for btn in bottoni_data if 'btn-danger' not in btn.get_attribute('class').split(' ')]
-    days = [Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0) for idx, btn in enumerate(bottoni_data_validi)]
+    days = []
+    for idx, btn in enumerate(bottoni_data_validi):
+        try:
+            days.append(Day(btn.text, btn, idx, datetime.strptime(btn.text, "%d/%m/%Y").strftime("%A"), 0, 0, 0, 0))
+        except ValueError:
+            logger.info(f"Found invalid button with text {btn.text}")
     return days
 
 
@@ -103,8 +108,15 @@ def has_day_changed(current_day):
 def open_bookings_page():
     driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
     print(driver.current_url)
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
-    driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
+    cookies_chiudi = driver.find_element(By.CSS_SELECTOR, '[data-hook="consent-banner-close-button"]')
+    if cookies_chiudi:
+        cookies_chiudi.click()
+    avviso_chiudi = driver.find_element(By.CLASS_NAME, "wixui-button__label")
+    if avviso_chiudi:
+        driver.execute_script("arguments[0].click();", avviso_chiudi)
+        # avviso_chiudi.click()
+    # driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
+    # driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
     original_window = driver.current_window_handle
     for window_handle in driver.window_handles:
         if window_handle != original_window:
