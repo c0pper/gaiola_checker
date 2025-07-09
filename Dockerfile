@@ -23,4 +23,7 @@ COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 COPY . .
 
-CMD [ "python3", "./bot.py"]
+ENV PYTHONPATH="${PYTHONPATH}:/app"
+
+# CMD [ "python3", "./bot.py"]
+CMD [ "python3", "./src/main.py"]

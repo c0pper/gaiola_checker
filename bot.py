@@ -9,7 +9,12 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from pyvirtualdisplay import Display
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackContext, CallbackQueryHandler, MessageHandler, filters
 from dotenv import load_dotenv
@@ -21,6 +26,8 @@ from helpers import save_to_json, find_code_by_name, delete_booking_file
 load_dotenv()
 TELE_TOKEN = os.getenv('TELE_TOKEN')
 MY_ID = os.getenv("MY_ID")
+CUSTOM_USER_AGENT = os.getenv('CUSTOM_USER_AGENT', 'Mozilla/5.0 (X11; Linux x86_64; rv:137.0) Gecko/20100101 Firefox/137.0')
+FIREFOX_PROFILE_PATH = os.getenv('FIREFOX_PROFILE_PATH')
 
 # Enable logging
 logging.basicConfig(
@@ -44,20 +51,16 @@ class Day:
     def __repr__(self) -> str:
         return f"{self.date} - prev_disp_morning: {self.prev_disp_morning}, new_disp_morning: {self.new_disp_morning}, prev_disp_noon: {self.prev_disp_noon}, new_disp_noon: {self.new_disp_noon}"
 
-
 class Turno(Enum):
     MATTINO = "Mattino"
     POMERIGGIO = "Pomeriggio"
 
-
 # Arbitrarily set days that i want to check
-# ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 chosen_days_str = os.getenv('CHOSEN_DAYS')
 if chosen_days_str:
     chosen_days = chosen_days_str.split(',')
 else:
     chosen_days = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
-
 
 def is_raspberry_pi():
     try:
@@ -68,22 +71,284 @@ def is_raspberry_pi():
         pass
     return False
 
+def human_like_delay(min_delay=0.5, max_delay=2.0):
+    """Generate human-like random delays"""
+    delay = random.uniform(min_delay, max_delay)
+    sleep(delay)
 
-def get_driver():
-    if is_raspberry_pi():
-        options = Options()
-        options.headless = True  # Run in headless mode
-        driver = webdriver.Firefox(options=options, service=Service(executable_path='/usr/local/bin/geckodriver'))
+def human_like_scroll(driver, element=None):
+    """Simulate human-like scrolling"""
+    if element:
+        # Scroll to element with random offset
+        driver.execute_script(
+            "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", 
+            element
+        )
     else:
-        driver = webdriver.Firefox()
+        # Random scroll
+        scroll_amount = random.randint(100, 500)
+        driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
+    
+    human_like_delay(0.5, 1.5)
+
+def human_like_mouse_movement(driver, element):
+    """Simulate human-like mouse movement to element"""
+    actions = ActionChains(driver)
+    
+    # Move to a random point near the element first
+    actions.move_to_element_with_offset(element, 
+                                       random.randint(-10, 10), 
+                                       random.randint(-10, 10))
+    actions.perform()
+    human_like_delay(0.1, 0.3)
+    
+    # Then move to the actual element
+    actions.move_to_element(element)
+    actions.perform()
+    human_like_delay(0.2, 0.5)
+
+def get_enhanced_driver():
+    """Enhanced driver with better anti-detection measures"""
+    options = Options()
+    
+    # Basic options
+    if is_raspberry_pi():
+        options.headless = True
+    
+    # Enhanced anti-detection preferences
+    prefs = {
+        # Disable automation indicators
+        "dom.webdriver.enabled": False,
+        "useAutomationExtension": False,
+        
+        # Disable navigator.webdriver property
+        "dom.webdriver.enabled": False,
+        
+        # Disable images and CSS for faster loading (optional)
+        # "permissions.default.image": 2,
+        # "permissions.default.stylesheet": 2,
+        
+        # Disable notifications
+        "dom.push.enabled": False,
+        "dom.push.userAgentID": "",
+        
+        # Disable geolocation
+        "geo.enabled": False,
+        
+        # Disable WebRTC
+        "media.peerconnection.enabled": False,
+        
+        # Set language
+        "intl.accept_languages": "en-US,en;q=0.9",
+        
+        # Disable automation flags
+        "marionette": False,
+        "dom.disable_beforeunload": True,
+    }
+    
+    # Apply preferences
+    for key, value in prefs.items():
+        try:
+            options.set_preference(key, value)
+        except Exception as e:
+            logger.warning(f"Could not set preference {key}: {e}")
+    
+    # Check if a Firefox profile path is provided and exists
+    if FIREFOX_PROFILE_PATH and os.path.exists(FIREFOX_PROFILE_PATH):
+        logger.info(f"Using Firefox profile from: {FIREFOX_PROFILE_PATH}")
+        profile = FirefoxProfile(FIREFOX_PROFILE_PATH)
+        
+        # Set additional profile preferences
+        profile.set_preference("dom.webdriver.enabled", False)
+        profile.set_preference("useAutomationExtension", False)
+        profile.set_preference("general.useragent.override", CUSTOM_USER_AGENT)
+        
+        options.profile = profile
+    else:
+        logger.warning("No Firefox profile path provided or path does not exist. Using default profile.")
+    
+    # Set custom User-Agent
+    options.set_preference("general.useragent.override", CUSTOM_USER_AGENT)
+    logger.info(f"Setting User-Agent to: {CUSTOM_USER_AGENT}")
+    
+    service = Service(executable_path='/usr/local/bin/geckodriver') if is_raspberry_pi() else None
+    driver = webdriver.Firefox(options=options, service=service)
+    
+    # Execute JavaScript to remove webdriver property
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    
+    # Add some randomness to viewport size
+    if not is_raspberry_pi():
+        width = random.randint(1200, 1920)
+        height = random.randint(800, 1080)
+        driver.set_window_size(width, height)
+    
     return driver
 
-driver = get_driver()
+def wait_for_element(driver, by, value, timeout=10):
+    """Wait for element with timeout"""
+    try:
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((by, value))
+        )
+        return element
+    except TimeoutException:
+        logger.warning(f"Element not found within {timeout} seconds: {value}")
+        return None
+
+def safe_click(driver, element, use_js=False):
+    """Safely click an element with human-like behavior"""
+    try:
+        # Scroll to element
+        human_like_scroll(driver, element)
+        
+        # Wait a bit
+        human_like_delay(0.5, 1.0)
+        
+        # Move mouse to element
+        human_like_mouse_movement(driver, element)
+        
+        # Wait for element to be clickable
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable(element))
+        
+        if use_js:
+            # Use JavaScript click as fallback
+            driver.execute_script("arguments[0].click();", element)
+        else:
+            # Try normal click first
+            element.click()
+        
+        # Wait after click
+        human_like_delay(1.0, 2.0)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error clicking element: {e}")
+        if not use_js:
+            # Retry with JavaScript click
+            return safe_click(driver, element, use_js=True)
+        return False
+
+
+def open_bookings_page_enhanced(driver):
+    """Enhanced booking page opening with better anti-detection"""
+    try:
+        # Navigate to the main page first
+        logger.info("Navigating to main page...")
+        driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
+        
+        # Wait for page to load
+        human_like_delay(2, 4)
+        
+        # Handle cookies banner
+        try:
+            cookies_button = wait_for_element(driver, By.CSS_SELECTOR, '[data-hook="consent-banner-close-button"]', 5)
+            if cookies_button:
+                logger.info("Closing cookies banner...")
+                safe_click(driver, cookies_button)
+        except Exception as e:
+            logger.info(f"No cookie banner found: {e}")
+        
+        # Handle initial alert/popup
+        # try:
+        #     # Try multiple selectors for the popup close button
+        #     popup_selectors = [
+        #         ".wixui-button__label",
+        #         "[data-testid='popupCloseButton']",
+        #         ".close-button",
+        #         "[aria-label='Close']"
+        #     ]
+            
+        #     for selector in popup_selectors:
+        #         try:
+        #             popup_button = wait_for_element(driver, By.CSS_SELECTOR, selector, 3)
+        #             if popup_button:
+        #                 logger.info(f"Closing popup with selector: {selector}")
+        #                 safe_click(driver, popup_button)
+        #                 break
+        #         except Exception:
+        #             continue
+                    
+        # except Exception as e:
+        #     logger.info(f"No initial alert found: {e}")
+        
+        # Wait and do some human-like browsing behavior
+        human_like_delay(2, 4)
+        
+        # Random scroll to simulate reading
+        for _ in range(random.randint(1, 3)):
+            human_like_scroll(driver)
+            human_like_delay(1, 2)
+        
+        # Find and click the "PRENOTA QUI" button
+        prenota_selectors = [
+            ".StylableButton2545352419__root",
+            "[data-testid='linkElement']",
+            "a[href*='booking']",
+            "button:contains('PRENOTA')",
+            ".booking-button"
+        ]
+        
+        prenota_button = None
+        for selector in prenota_selectors:
+            try:
+                prenota_button = wait_for_element(driver, By.CSS_SELECTOR, selector, 5)
+                if prenota_button:
+                    logger.info(f"Found PRENOTA button with selector: {selector}")
+                    break
+            except Exception:
+                continue
+        
+        if not prenota_button:
+            logger.error("Could not find PRENOTA QUI button")
+            return False
+        
+        # Scroll to button area and wait
+        human_like_scroll(driver, prenota_button)
+        human_like_delay(1, 3)
+        
+        # Click the button
+        logger.info("Clicking PRENOTA QUI button...")
+        if not safe_click(driver, prenota_button):
+            logger.error("Failed to click PRENOTA button")
+            return False
+        
+        # Handle window switching if new window opens
+        original_window = driver.current_window_handle
+        human_like_delay(2, 4)  # Wait for potential new window
+        
+        # Check if new window opened
+        if len(driver.window_handles) > 1:
+            for window_handle in driver.window_handles:
+                if window_handle != original_window:
+                    driver.switch_to.window(window_handle)
+                    logger.info("Switched to new window")
+                    break
+        
+        # Wait for new page to load
+        human_like_delay(2, 4)
+        
+        logger.info(f"Current URL after navigation: {driver.current_url}")
+        
+        # Check if we got redirected to an access denied page
+        if "access" in driver.current_url.lower() and "denied" in driver.current_url.lower():
+            logger.error("Got redirected to access denied page")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in open_bookings_page_enhanced: {e}")
+        return False
+
+
+
+driver = get_enhanced_driver()
+success = open_bookings_page_enhanced(driver)
 
 
 last_iteration_day = None
 days = None
-
 
 def get_days_list():
     bottoni_data = driver.find_elements(By.CLASS_NAME, "bottoni_data_904")
@@ -96,37 +361,11 @@ def get_days_list():
             logger.info(f"Found invalid button with text {btn.text}")
     return days
 
-
 def has_day_changed(current_day):
     """Check if the day has changed compared to the last iteration day."""
     global last_iteration_day
     return current_day != last_iteration_day
 
-
-#  Open Gaiola window -------------------------------------------------------------------------------
-# driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
-def open_bookings_page():
-    driver.get("https://www.areamarinaprotettagaiola.it/prenotazione/")
-    print(driver.current_url)
-    cookies_chiudi = driver.find_element(By.CSS_SELECTOR, '[data-hook="consent-banner-close-button"]')
-    if cookies_chiudi:
-        cookies_chiudi.click()
-    avviso_chiudi = driver.find_element(By.CLASS_NAME, "wixui-button__label")
-    if avviso_chiudi:
-        driver.execute_script("arguments[0].click();", avviso_chiudi)
-        # avviso_chiudi.click()
-    # driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
-    # driver.find_element(By.PARTIAL_LINK_TEXT, "PRENOTA").click()
-    original_window = driver.current_window_handle
-    for window_handle in driver.window_handles:
-        if window_handle != original_window:
-            driver.switch_to.window(window_handle)
-            break
-    sleep(1)
-    print(driver.current_url)
-
-
-open_bookings_page()
 while not days:  # è il primo ciclo dopo l'avvio
     logger.info("creating days list")
     sleep(1)
@@ -181,7 +420,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         last_iteration_day = current_day
         # driver.get("https://booking.areamarinaprotettagaiola.it/booking/")
         if "booking" not in driver.current_url:
-            open_bookings_page()
+            open_bookings_page_enhanced(driver)
         days = get_days_list()
         
         keyboard = [
