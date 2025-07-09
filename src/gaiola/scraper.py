@@ -97,9 +97,11 @@ class GaiolaScraper:
         logger.info(f"Setting User-Agent to: {self.custom_user_agent}")
         
         service = Service(executable_path='/usr/local/bin/geckodriver') if self.config.IS_RASPBERRY_PI else None
-        
+        selenium_host = os.getenv('SELENIUM_REMOTE_HOST', 'localhost')
+        selenium_url = f"http://{selenium_host}:4444"
+
         driver = webdriver.Remote(
-            command_executor=os.getenv('SELENIUM_REMOTE_URL', 'http://localhost:4444'),
+            command_executor=selenium_url,
             options=options
         )
         # driver = webdriver.Firefox(options=options, service=service)
