@@ -17,6 +17,7 @@ class Config:
     EMAIL: str
     TEL: str
     IS_RASPBERRY_PI: bool
+    CHECK_INTERVAL: int = int(os.getenv('CHECK_INTERVAL', "10")) 
 
     @classmethod
     def load_from_env(cls):

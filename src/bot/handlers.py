@@ -86,7 +86,8 @@ async def delete_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             job_names.append(job.name)
             job.schedule_removal()
             logger.info(f"Deleted job: {job.name}")
-        await context.bot.send_message(chat_id, text=f"Rimossi i seguenti task:\n{'\n'.join(job_names)}")
+        job_names_str ='\n'.join(job_names)
+        await context.bot.send_message(chat_id, text="Rimossi i seguenti task:\n" + job_names_str)
     else:
         await context.bot.send_message(chat_id, text="Nessun task attivo da rimuovere.")
     
@@ -227,7 +228,7 @@ async def select_date(update: Update, context: CallbackContext) -> None:
     # Schedule the job to check availability
     context.job_queue.run_repeating(
         scraper.check_availability, # This is the method to call
-        interval=10, # Check every 30 seconds
+        interval=scraper.config.CHECK_INTERVAL, # Check every 30 seconds
         first=5, # First run after 5 seconds
         name=str(chat_id), # Use chat_id as job name for easy management (one job per chat)
         chat_id=chat_id,

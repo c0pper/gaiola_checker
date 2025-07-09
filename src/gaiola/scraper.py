@@ -477,9 +477,9 @@ class GaiolaScraper:
                 self._fill_input_field(f"email_{form_idx}", email)
                 
                 self._select2_dropdown(f"stato_residenza_{form_idx}", "Italia")
-                self._select2_dropdown(f"regione_residenza_{form_idx}", "CAMPANIA")
                 self._select2_dropdown(f"provincia_residenza_{form_idx}", "Napoli")
-                self._select2_dropdown(f"comune_residenza_{form_idx}", "NAPOLI")
+                # self._select2_dropdown(f"regione_residenza_{form_idx}", "CAMPANIA")
+                # self._select2_dropdown(f"comune_residenza_{form_idx}", "NAPOLI")
 
                 # Handle municipalita dropdown (specific logic for 'muni')
                 try:
