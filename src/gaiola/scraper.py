@@ -97,7 +97,12 @@ class GaiolaScraper:
         logger.info(f"Setting User-Agent to: {self.custom_user_agent}")
         
         service = Service(executable_path='/usr/local/bin/geckodriver') if self.config.IS_RASPBERRY_PI else None
-        driver = webdriver.Firefox(options=options, service=service)
+        
+        driver = webdriver.Remote(
+            command_executor=os.getenv('SELENIUM_REMOTE_URL', 'http://localhost:4444'),
+            options=options
+        )
+        # driver = webdriver.Firefox(options=options, service=service)
         
         # Execute JavaScript to remove webdriver property
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
