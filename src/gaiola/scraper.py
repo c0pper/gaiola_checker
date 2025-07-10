@@ -96,15 +96,17 @@ class GaiolaScraper:
         options.set_preference("general.useragent.override", self.custom_user_agent)
         logger.info(f"Setting User-Agent to: {self.custom_user_agent}")
         
-        service = Service(executable_path='/usr/local/bin/geckodriver') if self.config.IS_RASPBERRY_PI else None
-        selenium_host = os.getenv('SELENIUM_REMOTE_HOST', 'localhost')
-        selenium_url = f"http://{selenium_host}:4444"
+        if self.config.IS_RASPBERRY_PI:
+            selenium_host = os.getenv('SELENIUM_REMOTE_HOST', 'localhost')
+            selenium_url = f"http://{selenium_host}:4444"
 
-        driver = webdriver.Remote(
-            command_executor=selenium_url,
-            options=options
-        )
-        # driver = webdriver.Firefox(options=options, service=service)
+            driver = webdriver.Remote(
+                command_executor=selenium_url,
+                options=options
+            )
+        else:
+            service = Service(executable_path='/usr/local/bin/geckodriver') if self.config.IS_RASPBERRY_PI else None
+            driver = webdriver.Firefox(options=options, service=service)
         
         # Execute JavaScript to remove webdriver property
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
